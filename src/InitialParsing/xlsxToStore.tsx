@@ -4,6 +4,9 @@ import * as XLSX from 'xlsx';
 
 const XlsxToStore = () => {
   const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [skippedDuplicates, setSkippedDuplicates] = useState<string[]>([]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -12,20 +15,21 @@ const XlsxToStore = () => {
     }
   };
 
-  const parseDate = (dateString: string | undefined): Date | undefined => {
-    if (!dateString) return undefined;
-  
-    // Split the date string into day, month, and year
-    const [day, month, year] = dateString.split('/').map(Number);
-  
-    // Validate the parsed values
-    if (isNaN(day) || isNaN(month) || isNaN(year)) {
-      console.warn('Invalid date format:', dateString);
-      return undefined;
+  const uploadChunk = async (chunk: any[], chunkIndex: number, totalChunks: number) => {
+    try {
+      const response = await axios.post('http://localhost:4000/drugCatalog', chunk, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      console.log(`Chunk ${chunkIndex + 1}/${totalChunks} uploaded successfully:`, response.data);
+
+      // Update progress
+      setProgress(((chunkIndex + 1) / totalChunks) * 100);
+    } catch (error) {
+      console.error(`Error uploading chunk ${chunkIndex + 1}:`, error);
+      // throw error; // Re-throw the error to stop further processing
     }
-  
-    // Create a Date object with the time set to midnight
-    return new Date(year, month - 1, day);
   };
 
   const handleUpload = async () => {
@@ -33,6 +37,9 @@ const XlsxToStore = () => {
       alert('Please select a file first');
       return;
     }
+
+    setUploading(true);
+    setProgress(0);
 
     const reader = new FileReader();
 
@@ -60,30 +67,53 @@ const XlsxToStore = () => {
         );
         drug['manufacturer'] = row[8]; // Column I
         drug['distributor'] = row[9]; // Column J
-        drug['yearOfRegistration'] = parseDate(row[10]); // Column K
+        drug['yearOfRegistration'] = row[10]; // Column K
         drug['countryOfOrigin'] = row[11]; // Column L
         drug['usageForm'] = row[12]; // Column M
         drug['contentOfReview'] = row[13]; // Column N
         drug['noProposalsOnPrice'] = row[14]; // Column O
-        drug['dateOfProposolsOnPrice'] = parseDate(row[15]); // Column P
+        drug['dateOfProposolsOnPrice'] = row[15]; // Column P
         drug['additionalNotes'] = row[16]; // Column Q
 
         return drug;
       });
 
-      // Send data to backend
-      axios.post('http://localhost:4000/drugCatalog', drugs, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-      .then(response => {
-        console.log('Data uploaded successfully:', response.data);
-        alert('Data uploaded successfully');
-      })
-      .catch(error => {
-        console.error('Error uploading data:', error);
-        alert('Error uploading data');
+      console.log('Parsed drugs:', drugs);
+
+      const uniqueIds = new Set();
+      const duplicatesInFile: string[] = [];
+      const uniqueDrugs = drugs.filter(drug => {
+        if (uniqueIds.has(drug._id)) {
+          duplicatesInFile.push(drug._id); // Track duplicates
+          return false; // Skip this drug
+        }
+        uniqueIds.add(drug._id);
+        return true; // Include this drug
+      });
+
+      if (duplicatesInFile.length > 0) {
+        console.warn('Duplicate _id values found in the uploaded file:', duplicatesInFile);
+        setSkippedDuplicates(duplicatesInFile);
+      }
+
+
+      // Split data into chunks
+      const chunkSize = 50;
+      const totalChunks = Math.ceil(drugs.length / chunkSize);
+
+      // Upload each chunk sequentially
+      const uploadChunks = async () => {
+        for (let i = 0; i < totalChunks; i++) {
+          const chunk = drugs.slice(i * chunkSize, (i + 1) * chunkSize);
+          await uploadChunk(chunk, i, totalChunks);
+        }
+        setUploading(false);
+        alert('Data upload completed successfully!');
+      };
+
+      uploadChunks().catch(() => {
+        setUploading(false);
+        alert('Data upload failed. Please check the console for details.');
       });
     };
 
@@ -93,8 +123,26 @@ const XlsxToStore = () => {
   return (
     <div>
       <h1>Upload Drug Catalog</h1>
-      <input type="file" accept=".xlsx, .xls" onChange={handleFileChange} />
-      <button onClick={handleUpload}>Upload</button>
+      <input type="file" accept=".xlsx, .xls" onChange={handleFileChange} disabled={uploading} />
+      <button onClick={handleUpload} disabled={uploading || !file}>
+        {uploading ? 'Uploading...' : 'Upload'}
+      </button>
+      {uploading && (
+        <div>
+          <progress value={progress} max="100" />
+          <span>{Math.round(progress)}%</span>
+        </div>
+      )}
+      {skippedDuplicates.length > 0 && (
+        <div>
+          <h3>Skipped Duplicates:</h3>
+          <ul>
+            {skippedDuplicates.map((id, index) => (
+              <li key={index}>{id}</li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 };
