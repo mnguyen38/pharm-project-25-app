@@ -5,6 +5,10 @@ with your device as local host.
 
 (run server by node server.js btw. I'm using mongo compass so connect on that and you can access the database w a gui too)
 
-Then upload a xlsx file to the prompt and it will auto parse to the schema found in schema.js in folder DrugCatalog in the server side of 
+Then upload a xlsx file to the prompt and it will auto parse to the schema found in schema.js in folder DrugCatalog in the server side of
 the app. Then it will store in the db w the mongo compass u can see the stored data easily.
 
+# Running tests
+Install jest: `npm install --include=dev`
+
+Run tests with: `npx jest`
