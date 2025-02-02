@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
+import './xlsxToStore.css';
 
 const XlsxToStore = () => {
   const [file, setFile] = useState<File | null>(null);
@@ -59,7 +60,7 @@ const XlsxToStore = () => {
         // Map columns based on their positions
         drug['name'] = row[1]; // Column B
         drug['ingredients'] = row[2]; // Column C
-        drug['_id'] = row[4]; // Column E
+        drug['registrationNumber'] = row[4]; // Column E
         drug['manufacturingRequirements'] = row[5]; // Column F
         drug['unitOfMeasure'] = row[6]; // Column G
         drug['estimatedPrice'] = parseFloat(
@@ -121,20 +122,19 @@ const XlsxToStore = () => {
   };
 
   return (
-    <div>
-      <h1>Upload Drug Catalog</h1>
+    <div className="upload-container">
       <input type="file" accept=".xlsx, .xls" onChange={handleFileChange} disabled={uploading} />
       <button onClick={handleUpload} disabled={uploading || !file}>
         {uploading ? 'Uploading...' : 'Upload'}
       </button>
       {uploading && (
-        <div>
+        <div className='progress-container'>
           <progress value={progress} max="100" />
           <span>{Math.round(progress)}%</span>
         </div>
       )}
       {skippedDuplicates.length > 0 && (
-        <div>
+        <div className='skipped-duplicates'>  {/*i just have this here for now it doesnt do anything but in case its needed down the line for sth*/}
           <h3>Skipped Duplicates:</h3>
           <ul>
             {skippedDuplicates.map((id, index) => (
