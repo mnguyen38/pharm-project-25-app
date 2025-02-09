@@ -12,6 +12,7 @@ const DisplayDrugCatalog: React.FC = () => {
         <Route path="/" element={<Navigate to="/display" replace />} />
         <Route path="/display" element={<DisplayCatalog />} />
         <Route path="/edit" element={<EditCatalog />} />
+        <Route path="/edit/:id" element={<EditCatalog />} />
         <Route path="/upload" element={<UploadCatalog />} />
       </Routes>
     </div>

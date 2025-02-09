@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import Navigation from '../Components/navigation.tsx';
 import './displayCatalog.css';
 
 interface Drug {
+  _id: string;
   registrationNumber: string;
   name: string;
   ingredients: string;
@@ -26,14 +28,16 @@ const DisplayCatalog: React.FC = () => {
   const [page, setPage] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(false);
   const [hasMore, setHasMore] = useState<boolean>(true);
-  const limit = 24; // can become an editable field
-  axios.defaults.baseURL = 'http://localhost:4000'; // changable on deploy
+  const limit = 24; // Number of drugs per page
+  const navigate = useNavigate();
+
+  axios.defaults.baseURL = 'http://localhost:4000'; // Changeable on deploy
 
   const fetchDrugs = async (pageNumber: number) => {
     setLoading(true);
     try {
       const response = await axios.get('/drugCatalog', {
-        params: { page: pageNumber, limit }
+        params: { page: pageNumber, limit },
       });
       const data: Drug[] = response.data;
       setHasMore(data.length === limit);
@@ -50,7 +54,23 @@ const DisplayCatalog: React.FC = () => {
   }, [page]);
 
   const loadMore = () => {
-    setPage(prevPage => prevPage + 1);
+    setPage((prevPage) => prevPage + 1);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this drug?')) {
+      try {
+        await axios.delete(`/drugCatalog/${id}`);
+        setDrugs((prevDrugs) => prevDrugs.filter((drug) => drug._id !== id)); // Remove from UI
+      } catch (error) {
+        console.error('Error deleting drug:', error);
+        alert('Failed to delete drug. Please try again.');
+      }
+    }
+  };
+
+  const handleEdit = (drug: Drug) => {
+    navigate(`/edit/${drug._id}`); // Pass the drug object as state
   };
 
   return (
@@ -59,8 +79,8 @@ const DisplayCatalog: React.FC = () => {
       <div className="display-container">
         <h3>Drug Catalog</h3>
         <div className="drug-grid">
-          {drugs.map((drug, index) => (
-            <div key={index} className="drug-card">
+          {drugs.map((drug) => (
+            <div key={drug._id} className="drug-card">
               <p><strong>Registration Number:</strong> {drug.registrationNumber}</p>
               <p><strong>Name:</strong> {drug.name}</p>
               <p><strong>Ingredients:</strong> {drug.ingredients}</p>
@@ -86,12 +106,17 @@ const DisplayCatalog: React.FC = () => {
               {drug.additionalNotes && (
                 <p><strong>Additional Notes:</strong> {drug.additionalNotes}</p>
               )}
+              {/* Edit and Delete Buttons */}
+              <div className="drug-actions">
+                <button onClick={() => handleEdit(drug)}>Edit</button>
+                <button onClick={() => handleDelete(drug._id)}>Delete</button>
+              </div>
             </div>
           ))}
         </div>
         {loading && <p>Loading...</p>}
         <div className="pagination">
-          <button onClick={() => setPage(page > 1 ? page - 1 : 1)} disabled={page === 1}>
+          <button onClick={() => setPage((prevPage) => (prevPage > 1 ? prevPage - 1 : 1))} disabled={page === 1}>
             &larr;
           </button>
           <span className="page-info">Page {page}</span>

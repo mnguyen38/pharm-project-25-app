@@ -1,0 +1,179 @@
+/* Container for the entire display area */
+.display-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: Arial, sans-serif;
+  background-color: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Title styling */
+.display-container h3 {
+  text-align: center;
+  margin-bottom: 20px;
+  color: #34495e;
+}
+
+/* Table styling */
+.drug-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+}
+
+.drug-table th,
+.drug-table td {
+  border: 1px solid #ccc;
+  padding: 10px;
+  text-align: left;
+}
+
+.drug-table th {
+  background-color: #34495e;
+  color: #fff;
+  font-weight: bold;
+}
+
+.drug-table tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
+
+.drug-table tr:hover {
+  background-color: #f1f1f1;
+}
+
+.drug-table input,
+.drug-table textarea {
+  width: 100%;
+  padding: 5px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.drug-table textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* Pagination container */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 30px;
+  gap: 10px;
+}
+
+/* Style for pagination buttons */
+.pagination button {
+  background-color: #34495e;
+  color: #fff;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.3s ease;
+}
+
+.pagination button:hover:not(:disabled) {
+  background-color: #2c3e50;
+}
+
+.pagination button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Current page info */
+.pagination .page-info {
+  font-size: 16px;
+  color: #333;
+}
+
+/* Progress container */
+.progress-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.progress-container progress {
+  width: 100%;
+  height: 20px;
+  border: none;
+  border-radius: 5px;
+  overflow: hidden;
+  appearance: none;
+}
+
+.progress-container progress::-webkit-progress-bar {
+  background-color: #bdc3c7;
+}
+
+.progress-container progress::-webkit-progress-value {
+  background-color: #3498db;
+}
+
+/* Upload button */
+.upload-button {
+  background-color: #3498db;
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-top: 10px;
+  font-weight: bold;
+  font-size: 16px;
+  transition: background-color 0.3s ease;
+}
+
+.upload-button:hover:not(:disabled) {
+  background-color: #2980b9;
+}
+
+.upload-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Close modal button */
+.close-modal {
+  background-color: #e74c3c;
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-top: 10px;
+  font-weight: bold;
+  font-size: 16px;
+  transition: background-color 0.3s ease;
+}
+
+.close-modal:hover {
+  background-color: #c0392b;
+}
+
+/* Bulk Edit Button */
+.bulk-edit-button {
+  background-color: #3498db;
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-bottom: 20px;
+  font-weight: bold;
+  font-size: 16px;
+  transition: background-color 0.3s ease;
+}
+
+.bulk-edit-button:hover {
+  background-color: #2980b9;
+}
