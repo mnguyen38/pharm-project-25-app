@@ -93,6 +93,7 @@ const EditCatalog = () => {
   };
 
   const handleUpload = async () => {
+    console.log("Starting upload with data:", parsedData);
     if (parsedData.length === 0) {
       alert('No data to upload');
       return;
@@ -101,14 +102,17 @@ const EditCatalog = () => {
     setProgress(0);
     const chunkSize = 50;
     const totalChunks = Math.ceil(parsedData.length / chunkSize);
+    console.log(`Uploading in ${totalChunks} chunks`);
     try {
       for (let i = 0; i < totalChunks; i++) {
         const chunk = parsedData.slice(i * chunkSize, (i + 1) * chunkSize);
+        console.log(`Uploading chunk ${i+1}/${totalChunks}, size: ${chunk.length}`);
         await uploadChunk(chunk, i, totalChunks);
       }
       alert('Data upload completed successfully!');
       navigate('/'); // Redirect back to the main catalog
     } catch (error) {
+      console.error("Upload error details:", error);
       alert('Data upload failed. Please check the console for details.');
     } finally {
       setUploading(false);
