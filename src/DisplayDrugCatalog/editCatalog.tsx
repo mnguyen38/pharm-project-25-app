@@ -153,30 +153,27 @@ const EditCatalog = () => {
   // Function to add new canonical ingredients to the database
   const addNewCanonicalIngredients = async (ingredients) => {
     try {
-      // Get current canonical ingredients for comparison
-      const response = await axios.get("/canonicalIngredients");
-      const existingIngredients = new Set(
-        response.data.map((ing) => ing.name.toLowerCase())
-      );
-
-      // Filter out ingredients that already exist (case insensitive)
-      const newIngredients = ingredients.filter(
-        (ingredient) => !existingIngredients.has(ingredient.toLowerCase())
-      );
-
-      if (newIngredients.length === 0) {
-        console.log("No new ingredients to add");
+      // Skip if there are no ingredients to add
+      if (!ingredients || ingredients.length === 0) {
+        console.log("No ingredients to add");
         return;
       }
 
-      // Add the new ingredients
-      console.log("Adding new canonical ingredients:", newIngredients);
-      await axios.post("/canonicalIngredients", newIngredients);
+      console.log("Adding canonical ingredients:", ingredients);
 
-      // Refresh the ingredients list
-      fetchCanonicalIngredients();
+      // Call the POST endpoint directly with the array of ingredients
+      const response = await axios.post("/canonicalIngredients", ingredients);
+      console.log("Added canonical ingredients:", response.data);
+
+      // Refresh the ingredients list if any were added
+      if (response.data.added > 0) {
+        fetchCanonicalIngredients();
+      }
+
+      return response.data;
     } catch (error) {
       console.error("Error adding new canonical ingredients:", error);
+      return { error: error.message };
     }
   };
 
@@ -426,7 +423,12 @@ const EditCatalog = () => {
     }
     // If cleanedIngredients are being directly edited (as a comma-separated string)
     else if (field === "cleanedIngredientsString") {
-      // Convert the comma-separated string to an array
+      // Store the raw string input without processing it
+      // This allows users to type commas without immediate splitting
+      updatedData[index].cleanedIngredientsString = value;
+
+      // Only convert to array when we're not actively typing
+      // The array is still maintained for the actual data structure
       const ingredientsArray = value
         .split(",")
         .map((item: string) => item.trim())
@@ -546,6 +548,40 @@ const EditCatalog = () => {
 
     // Add the new empty drug to the data
     setParsedData([...parsedData, emptyDrug]);
+  };
+
+  // Function to add a new ingredient to a drug's cleanedIngredients
+  const handleAddIngredient = (index: number, newIngredient: string) => {
+    // Trim and validate the ingredient
+    const trimmedIngredient = newIngredient.trim();
+    if (!trimmedIngredient) return;
+
+    const updatedData = [...parsedData];
+    // Create array if it doesn't exist
+    if (!updatedData[index].cleanedIngredients) {
+      updatedData[index].cleanedIngredients = [];
+    }
+
+    // Only add if it's not already in the list
+    if (!updatedData[index].cleanedIngredients!.includes(trimmedIngredient)) {
+      updatedData[index].cleanedIngredients = [
+        ...updatedData[index].cleanedIngredients!,
+        trimmedIngredient,
+      ];
+      setParsedData(updatedData);
+    }
+  };
+
+  // Function to remove an ingredient from a drug's cleanedIngredients
+  const handleRemoveIngredient = (
+    drugIndex: number,
+    ingredientIndex: number
+  ) => {
+    const updatedData = [...parsedData];
+    updatedData[drugIndex].cleanedIngredients = updatedData[
+      drugIndex
+    ].cleanedIngredients!.filter((_, idx) => idx !== ingredientIndex);
+    setParsedData(updatedData);
   };
 
   // Calculate current items based on mode
@@ -672,19 +708,57 @@ const EditCatalog = () => {
                       </button>
                     </td>
                     <td>
-                      <textarea
-                        value={formatCleanedIngredients(
-                          drug.cleanedIngredients
-                        )}
-                        onChange={(e) =>
-                          handleEdit(
-                            index,
-                            "cleanedIngredientsString",
-                            e.target.value
-                          )
-                        }
-                        placeholder="Cleaned ingredients"
-                      />
+                      {/* Tag-based ingredient display system */}
+                      <div className="ingredient-tags">
+                        {drug.cleanedIngredients &&
+                          drug.cleanedIngredients.map(
+                            (ingredient, ingredientIndex) => (
+                              <div
+                                key={ingredientIndex}
+                                className="ingredient-tag"
+                              >
+                                {ingredient}
+                                <button
+                                  className="remove-tag"
+                                  onClick={() =>
+                                    handleRemoveIngredient(
+                                      index,
+                                      ingredientIndex
+                                    )
+                                  }
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            )
+                          )}
+                      </div>
+
+                      {/* Add new ingredient form */}
+                      <div className="add-ingredient-form">
+                        <input
+                          type="text"
+                          placeholder="Add ingredient..."
+                          className="add-ingredient-input"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              handleAddIngredient(index, e.currentTarget.value);
+                              e.currentTarget.value = "";
+                            }
+                          }}
+                        />
+                        <button
+                          className="add-ingredient-button"
+                          onClick={(e) => {
+                            const input = e.currentTarget
+                              .previousSibling as HTMLInputElement;
+                            handleAddIngredient(index, input.value);
+                            input.value = "";
+                          }}
+                        >
+                          Add
+                        </button>
+                      </div>
 
                       {/* Ingredient Suggestions */}
                       <div className="ingredient-suggestions">
@@ -712,7 +786,7 @@ const EditCatalog = () => {
                                         key={suggestion.name}
                                         className="suggestion-item"
                                         onClick={() =>
-                                          handleSuggestionClick(
+                                          handleAddIngredient(
                                             index,
                                             suggestion.name
                                           )
