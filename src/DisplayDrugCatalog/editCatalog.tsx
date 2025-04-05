@@ -36,39 +36,57 @@ const EditCatalog = () => {
   const [progress, setProgress] = useState(0);
   const [currentPage, setCurrentPage] = useState(1); // Pagination state
   const [itemsPerPage] = useState(10); // Number of items per page
+  const [dataInitialized, setDataInitialized] = useState(false);
 
   useEffect(() => {
-    if (params.id) {
-      // Fetch the drug by ID for individual editing
-      const fetchDrug = async () => {
-        try {
-          const response = await axios.get(`/drugCatalog/${params.id}`);
-          setDrugToEdit(response.data);
-          setParsedData([response.data]);
-        } catch (error) {
-          console.error("Error fetching drug:", error);
-          alert("Failed to load drug details.");
-          navigate("/");
-        }
-      };
-      fetchDrug();
-    } else {
-      // Use parsed data for bulk editing and ensure cleanedIngredients are populated
-      const dataWithCleanedIngredients = parsedDataFromState.map(
-        (drug: Drug) => {
-          // If cleanedIngredients are missing, generate them
-          if (!drug.cleanedIngredients && drug.ingredients) {
-            return {
-              ...drug,
-              cleanedIngredients: cleanIngredients(drug.ingredients),
-            };
+    console.log("EditCatalog component mounted");
+    console.log("parsedDataFromState:", parsedDataFromState);
+    console.log("params.id:", params.id);
+
+    // Only run this effect once on initial render or when relevant dependencies change
+    if (!dataInitialized) {
+      if (params.id) {
+        console.log("Fetching drug by ID:", params.id);
+        // Fetch the drug by ID for individual editing
+        const fetchDrug = async () => {
+          try {
+            const baseUrl = axios.defaults.baseURL;
+            console.log("API base URL:", baseUrl);
+
+            const response = await axios.get(`/drugCatalog/${params.id}`);
+            console.log("Drug data received:", response.data);
+            setDrugToEdit(response.data);
+            setParsedData([response.data]);
+            setDataInitialized(true); // Mark data as initialized
+          } catch (error) {
+            console.error("Error fetching drug:", error);
+            alert("Failed to load drug details.");
+            navigate("/");
           }
-          return drug;
-        }
-      );
-      setParsedData(dataWithCleanedIngredients);
+        };
+        fetchDrug();
+      } else {
+        // Direct navigation to /edit without params - show empty editable table
+        console.log("Direct navigation to /edit without ID - preparing empty form");
+        // Set an empty template for a new drug
+        const emptyDrug: Drug = {
+          name: "",
+          ingredients: "",
+          cleanedIngredients: [],
+          registrationNumber: "",
+          manufacturingRequirements: "",
+          unitOfMeasure: "",
+          manufacturer: "",
+          distributor: "",
+          yearOfRegistration: "",
+          countryOfOrigin: "",
+          usageForm: "",
+        };
+        setParsedData([emptyDrug]); // Start with one empty drug
+        setDataInitialized(true);
+      }
     }
-  }, [params.id, navigate, parsedDataFromState]);
+  }, [params.id, navigate, parsedDataFromState, dataInitialized]);
 
   const handleEdit = (index: number, field: string, value: any) => {
     const updatedData = [...parsedData];
@@ -100,15 +118,11 @@ const EditCatalog = () => {
     totalChunks: number
   ) => {
     try {
-      const response = await axios.post(
-        "http://localhost:4000/drugCatalog",
-        chunk,
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      const response = await axios.post("/drugCatalog", chunk, {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
       console.log(
         `Chunk ${chunkIndex + 1}/${totalChunks} uploaded successfully`,
         response.data
@@ -126,10 +140,7 @@ const EditCatalog = () => {
       return;
     }
     try {
-      const response = await axios.put(
-        `http://localhost:4000/drugCatalog/${drug._id}`,
-        drug
-      );
+      const response = await axios.put(`/drugCatalog/${drug._id}`, drug);
       console.log("Drug updated successfully:", response.data);
       alert("Drug saved successfully!");
     } catch (error) {
@@ -176,6 +187,24 @@ const EditCatalog = () => {
     }
   };
 
+  // Add function to add a new row
+  const addNewRow = () => {
+    const emptyDrug: Drug = {
+      name: "",
+      ingredients: "",
+      cleanedIngredients: [],
+      registrationNumber: "",
+      manufacturingRequirements: "",
+      unitOfMeasure: "",
+      manufacturer: "",
+      distributor: "",
+      yearOfRegistration: "",
+      countryOfOrigin: "",
+      usageForm: "",
+    };
+    setParsedData([...parsedData, emptyDrug]);
+  };
+
   // Pagination logic
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -199,106 +228,134 @@ const EditCatalog = () => {
     return ingredients.join(", ");
   };
 
+  // Add some debugging output to the render function
+  console.log("Rendering EditCatalog. Current state:", {
+    dataInitialized,
+    parsedDataLength: parsedData.length,
+    currentPage,
+    currentItemsLength: parsedData.slice(
+      (currentPage - 1) * itemsPerPage,
+      currentPage * itemsPerPage
+    ).length,
+  });
+
   return (
     <>
       <Navigation />
       <div className="display-container">
-        <h3>{params.id ? "Edit Drug" : "Edit Data"}</h3>
-        <table className="drug-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Raw Ingredients</th>
-              <th>Cleaned Ingredients</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {currentItems.map((drug, index) => (
-              <tr key={indexOfFirstItem + index}>
-                <td>
-                  <input
-                    type="text"
-                    value={drug.name}
-                    onChange={(e) =>
-                      handleEdit(
-                        indexOfFirstItem + index,
-                        "name",
-                        e.target.value
-                      )
-                    }
-                  />
-                </td>
-                <td>
-                  <textarea
-                    value={drug.ingredients}
-                    onChange={(e) =>
-                      handleEdit(
-                        indexOfFirstItem + index,
-                        "ingredients",
-                        e.target.value
-                      )
-                    }
-                  />
-                </td>
-                <td>
-                  <textarea
-                    value={formatCleanedIngredients(drug.cleanedIngredients)}
-                    onChange={(e) =>
-                      handleEdit(
-                        indexOfFirstItem + index,
-                        "cleanedIngredientsString",
-                        e.target.value
-                      )
-                    }
-                    placeholder="Comma-separated list of cleaned ingredients"
-                  />
-                  <small className="text-muted">
-                    Edit ingredients by separating them with commas
-                  </small>
-                </td>
-                <td>
-                  <button onClick={() => handleSave(indexOfFirstItem + index)}>
-                    Save
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {/* Pagination with Arrows */}
-        <div className="pagination">
-          <button onClick={paginatePrev} disabled={currentPage === 1}>
-            Previous
-          </button>
-          <span className="page-info">
-            Page {currentPage} of {Math.ceil(parsedData.length / itemsPerPage)}
-          </span>
-          <button
-            onClick={paginateNext}
-            disabled={
-              currentPage === Math.ceil(parsedData.length / itemsPerPage)
-            }
-          >
-            Next
-          </button>
-        </div>
-        {/* Progress Bar */}
-        {uploading && (
-          <div className="progress-container">
-            <progress value={progress} max="100" />
-            <span>{Math.round(progress)}%</span>
+        <h3>{params.id ? "Edit Drug" : "Add/Edit Drugs"}</h3>
+        {parsedData.length === 0 ? (
+          <div className="no-data-message">
+            <p>No data available. You can add a new drug entry or upload files.</p>
+            <button onClick={addNewRow} className="add-row-button">
+              Add New Drug
+            </button>
           </div>
-        )}
-        {/* Upload Button */}
-        {!params.id && (
-          <button
-            onClick={handleUpload}
-            disabled={uploading || parsedData.length === 0}
-            className="upload-button"
-          >
-            {uploading ? "Uploading..." : "Upload"}
-          </button>
+        ) : (
+          <>
+            <table className="drug-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Raw Ingredients</th>
+                  <th>Cleaned Ingredients</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentItems.map((drug, index) => (
+                  <tr key={indexOfFirstItem + index}>
+                    <td>
+                      <input
+                        type="text"
+                        value={drug.name}
+                        onChange={(e) =>
+                          handleEdit(
+                            indexOfFirstItem + index,
+                            "name",
+                            e.target.value
+                          )
+                        }
+                      />
+                    </td>
+                    <td>
+                      <textarea
+                        value={drug.ingredients}
+                        onChange={(e) =>
+                          handleEdit(
+                            indexOfFirstItem + index,
+                            "ingredients",
+                            e.target.value
+                          )
+                        }
+                      />
+                    </td>
+                    <td>
+                      <textarea
+                        value={formatCleanedIngredients(drug.cleanedIngredients)}
+                        onChange={(e) =>
+                          handleEdit(
+                            indexOfFirstItem + index,
+                            "cleanedIngredientsString",
+                            e.target.value
+                          )
+                        }
+                        placeholder="Comma-separated list of cleaned ingredients"
+                      />
+                      <small className="text-muted">
+                        Edit ingredients by separating them with commas
+                      </small>
+                    </td>
+                    <td>
+                      <button onClick={() => handleSave(indexOfFirstItem + index)}>
+                        Save
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {/* Pagination with Arrows */}
+            <div className="pagination">
+              <button onClick={paginatePrev} disabled={currentPage === 1}>
+                Previous
+              </button>
+              <span className="page-info">
+                Page {currentPage} of {Math.ceil(parsedData.length / itemsPerPage)}
+              </span>
+              <button
+                onClick={paginateNext}
+                disabled={
+                  currentPage === Math.ceil(parsedData.length / itemsPerPage)
+                }
+              >
+                Next
+              </button>
+            </div>
+            {/* Add New Row Button */}
+            {!params.id && (
+              <button onClick={addNewRow} className="add-row-button">
+                Add New Row
+              </button>
+            )}
+            {/* Progress Bar */}
+            {uploading && (
+              <div className="progress-container">
+                <progress value={progress} max="100" />
+                <span>{Math.round(progress)}%</span>
+              </div>
+            )}
+            {/* Upload Button */}
+            {!params.id && (
+              <button
+                onClick={handleUpload}
+                disabled={uploading || parsedData.length === 0}
+                className="upload-button"
+              >
+                {uploading ? "Uploading..." : "Upload"}
+              </button>
+            )}
+          </>
         )}
       </div>
     </>
