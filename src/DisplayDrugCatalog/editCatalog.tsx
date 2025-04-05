@@ -5,6 +5,9 @@ import "./editCatalog.css";
 import Navigation from "../Components/navigation.tsx";
 import { cleanIngredients } from "../IngredientsParsing/cleanIngredients.ts";
 
+// Set axios default base URL
+axios.defaults.baseURL = "http://localhost:4000";
+
 interface Drug {
   _id?: string; // Optional _id for existing drugs
   registrationNumber: string;
@@ -265,8 +268,10 @@ const EditCatalog = () => {
     currentItems = parsedData.slice(indexOfFirstItem, indexOfLastItem);
   }
 
+  // Modified pagination functions for database mode
   const paginateNext = () => {
     if (mode === "database") {
+      console.log("Navigating to next page in database mode");
       if (currentPage < totalPages) {
         fetchDrugsFromDatabase(currentPage + 1);
       }
@@ -280,6 +285,7 @@ const EditCatalog = () => {
 
   const paginatePrev = () => {
     if (mode === "database") {
+      console.log("Navigating to previous page in database mode");
       if (currentPage > 1) {
         fetchDrugsFromDatabase(currentPage - 1);
       }
