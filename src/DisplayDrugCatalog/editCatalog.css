@@ -177,3 +177,92 @@
 .bulk-edit-button:hover {
   background-color: #2980b9;
 }
+
+/* New styles for the ingredient parsing features */
+.autoparse-button {
+  background-color: #fbbc05;
+  color: #3c4043;
+  font-size: 13px;
+  padding: 5px 10px;
+  margin-top: 5px;
+}
+
+.autoparse-button:hover {
+  background-color: #f4b400;
+}
+
+/* Instructions box */
+.instructions-box {
+  background-color: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 10px 15px;
+  margin-bottom: 20px;
+}
+
+.instructions-box p {
+  margin: 0;
+  font-size: 14px;
+  color: #3c4043;
+}
+
+/* Ingredient suggestions */
+.ingredient-suggestions {
+  margin-top: 10px;
+}
+
+.suggestions-button {
+  background-color: #4285f4;
+  font-size: 13px;
+  padding: 5px 10px;
+}
+
+.suggestions-list {
+  margin-top: 8px;
+}
+
+.suggestion-group {
+  margin-bottom: 8px;
+  border-bottom: 1px solid #f0f0f0;
+  padding-bottom: 5px;
+}
+
+.ingredient-name {
+  display: block;
+  font-weight: 500;
+  color: #3c4043;
+  font-size: 13px;
+  margin-bottom: 3px;
+}
+
+.similar-ingredients {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.suggestion-item {
+  display: inline-block;
+  background-color: #e8f0fe;
+  color: #1967d2;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+  border: 1px solid #d2e3fc;
+  margin: 2px;
+}
+
+.suggestion-item:hover {
+  background-color: #d2e3fc;
+  transform: scale(1.05);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Visual indication that this is clickable */
+.suggestion-item:before {
+  content: "✓ ";
+  font-size: 10px;
+  opacity: 0.7;
+}
