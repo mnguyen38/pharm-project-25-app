@@ -1,14 +1,16 @@
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import './editCatalog.css';
-import Navigation from '../Components/navigation.tsx';
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import "./editCatalog.css";
+import Navigation from "../Components/navigation.tsx";
+import { cleanIngredients } from "../IngredientsParsing/cleanIngredients.ts";
 
 interface Drug {
   _id?: string; // Optional _id for existing drugs
   registrationNumber: string;
   name: string;
   ingredients: string;
+  cleanedIngredients?: string[]; // Array of cleaned ingredients
   manufacturingRequirements: string;
   unitOfMeasure: string;
   estimatedPrice?: number;
@@ -44,32 +46,73 @@ const EditCatalog = () => {
           setDrugToEdit(response.data);
           setParsedData([response.data]);
         } catch (error) {
-          console.error('Error fetching drug:', error);
-          alert('Failed to load drug details.');
-          navigate('/');
+          console.error("Error fetching drug:", error);
+          alert("Failed to load drug details.");
+          navigate("/");
         }
       };
       fetchDrug();
     } else {
-      // Use parsed data for bulk editing
-      setParsedData(parsedDataFromState);
+      // Use parsed data for bulk editing and ensure cleanedIngredients are populated
+      const dataWithCleanedIngredients = parsedDataFromState.map(
+        (drug: Drug) => {
+          // If cleanedIngredients are missing, generate them
+          if (!drug.cleanedIngredients && drug.ingredients) {
+            return {
+              ...drug,
+              cleanedIngredients: cleanIngredients(drug.ingredients),
+            };
+          }
+          return drug;
+        }
+      );
+      setParsedData(dataWithCleanedIngredients);
     }
-  }, [params.id, navigate]); // Removed parsedDataFromState from dependencies
+  }, [params.id, navigate, parsedDataFromState]);
 
   const handleEdit = (index: number, field: string, value: any) => {
     const updatedData = [...parsedData];
-    updatedData[index][field] = value;
+
+    // If ingredients are being modified, also update cleanedIngredients
+    if (field === "ingredients") {
+      updatedData[index][field] = value;
+      updatedData[index].cleanedIngredients = cleanIngredients(value);
+    }
+    // If cleanedIngredients are being directly edited (as a comma-separated string)
+    else if (field === "cleanedIngredientsString") {
+      // Convert the comma-separated string to an array
+      const ingredientsArray = value
+        .split(",")
+        .map((item: string) => item.trim())
+        .filter((item: string) => item.length > 0);
+
+      updatedData[index].cleanedIngredients = ingredientsArray;
+    } else {
+      updatedData[index][field] = value;
+    }
+
     setParsedData(updatedData);
   };
 
-  const uploadChunk = async (chunk: Drug[], chunkIndex: number, totalChunks: number) => {
+  const uploadChunk = async (
+    chunk: Drug[],
+    chunkIndex: number,
+    totalChunks: number
+  ) => {
     try {
-      const response = await axios.post('http://localhost:4000/drugCatalog', chunk, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      console.log(`Chunk ${chunkIndex + 1}/${totalChunks} uploaded successfully`, response.data);
+      const response = await axios.post(
+        "http://localhost:4000/drugCatalog",
+        chunk,
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      console.log(
+        `Chunk ${chunkIndex + 1}/${totalChunks} uploaded successfully`,
+        response.data
+      );
       setProgress(((chunkIndex + 1) / totalChunks) * 100);
     } catch (error) {
       console.error(`Error uploading chunk ${chunkIndex + 1}:`, error);
@@ -79,23 +122,26 @@ const EditCatalog = () => {
 
   const updateDrug = async (drug: Drug) => {
     if (!drug._id) {
-      alert('Drug ID is missing. Cannot save.');
+      alert("Drug ID is missing. Cannot save.");
       return;
     }
     try {
-      const response = await axios.put(`/drugCatalog/${drug._id}`, drug);
-      console.log('Drug updated successfully:', response.data);
-      alert('Drug saved successfully!');
+      const response = await axios.put(
+        `http://localhost:4000/drugCatalog/${drug._id}`,
+        drug
+      );
+      console.log("Drug updated successfully:", response.data);
+      alert("Drug saved successfully!");
     } catch (error) {
-      console.error('Error saving drug:', error);
-      alert('Failed to save drug. Please try again.');
+      console.error("Error saving drug:", error);
+      alert("Failed to save drug. Please try again.");
     }
   };
 
   const handleUpload = async () => {
     console.log("Starting upload with data:", parsedData);
     if (parsedData.length === 0) {
-      alert('No data to upload');
+      alert("No data to upload");
       return;
     }
     setUploading(true);
@@ -106,14 +152,16 @@ const EditCatalog = () => {
     try {
       for (let i = 0; i < totalChunks; i++) {
         const chunk = parsedData.slice(i * chunkSize, (i + 1) * chunkSize);
-        console.log(`Uploading chunk ${i+1}/${totalChunks}, size: ${chunk.length}`);
+        console.log(
+          `Uploading chunk ${i + 1}/${totalChunks}, size: ${chunk.length}`
+        );
         await uploadChunk(chunk, i, totalChunks);
       }
-      alert('Data upload completed successfully!');
-      navigate('/'); // Redirect back to the main catalog
+      alert("Data upload completed successfully!");
+      navigate("/"); // Redirect back to the main catalog
     } catch (error) {
       console.error("Upload error details:", error);
-      alert('Data upload failed. Please check the console for details.');
+      alert("Data upload failed. Please check the console for details.");
     } finally {
       setUploading(false);
     }
@@ -124,7 +172,7 @@ const EditCatalog = () => {
     if (drug._id) {
       await updateDrug(drug);
     } else {
-      alert('Drug ID is missing. Cannot save.');
+      alert("Drug ID is missing. Cannot save.");
     }
   };
 
@@ -145,16 +193,23 @@ const EditCatalog = () => {
     }
   };
 
+  // Format cleaned ingredients array to string for editing
+  const formatCleanedIngredients = (ingredients?: string[]) => {
+    if (!ingredients || !Array.isArray(ingredients)) return "";
+    return ingredients.join(", ");
+  };
+
   return (
     <>
       <Navigation />
       <div className="display-container">
-        <h3>{params.id ? 'Edit Drug' : 'Edit Data'}</h3>
+        <h3>{params.id ? "Edit Drug" : "Edit Data"}</h3>
         <table className="drug-table">
           <thead>
             <tr>
               <th>Name</th>
-              <th>Ingredients</th>
+              <th>Raw Ingredients</th>
+              <th>Cleaned Ingredients</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -165,17 +220,47 @@ const EditCatalog = () => {
                   <input
                     type="text"
                     value={drug.name}
-                    onChange={(e) => handleEdit(indexOfFirstItem + index, 'name', e.target.value)}
+                    onChange={(e) =>
+                      handleEdit(
+                        indexOfFirstItem + index,
+                        "name",
+                        e.target.value
+                      )
+                    }
                   />
                 </td>
                 <td>
                   <textarea
                     value={drug.ingredients}
-                    onChange={(e) => handleEdit(indexOfFirstItem + index, 'ingredients', e.target.value)}
+                    onChange={(e) =>
+                      handleEdit(
+                        indexOfFirstItem + index,
+                        "ingredients",
+                        e.target.value
+                      )
+                    }
                   />
                 </td>
                 <td>
-                  <button onClick={() => handleSave(indexOfFirstItem + index)}>Save</button>
+                  <textarea
+                    value={formatCleanedIngredients(drug.cleanedIngredients)}
+                    onChange={(e) =>
+                      handleEdit(
+                        indexOfFirstItem + index,
+                        "cleanedIngredientsString",
+                        e.target.value
+                      )
+                    }
+                    placeholder="Comma-separated list of cleaned ingredients"
+                  />
+                  <small className="text-muted">
+                    Edit ingredients by separating them with commas
+                  </small>
+                </td>
+                <td>
+                  <button onClick={() => handleSave(indexOfFirstItem + index)}>
+                    Save
+                  </button>
                 </td>
               </tr>
             ))}
@@ -191,7 +276,9 @@ const EditCatalog = () => {
           </span>
           <button
             onClick={paginateNext}
-            disabled={currentPage === Math.ceil(parsedData.length / itemsPerPage)}
+            disabled={
+              currentPage === Math.ceil(parsedData.length / itemsPerPage)
+            }
           >
             Next
           </button>
@@ -210,7 +297,7 @@ const EditCatalog = () => {
             disabled={uploading || parsedData.length === 0}
             className="upload-button"
           >
-            {uploading ? 'Uploading...' : 'Upload'}
+            {uploading ? "Uploading..." : "Upload"}
           </button>
         )}
       </div>
