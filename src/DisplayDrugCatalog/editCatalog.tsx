@@ -464,7 +464,7 @@ const EditCatalog = () => {
     }
   };
 
-  const updateDrug = async (drug: Drug) => {
+  const updateDrug = async (drug: Drug, alertIfSuccess: boolean = true) => {
     if (!drug._id) {
       alert("Drug ID is missing. Cannot save.");
       return;
@@ -472,7 +472,9 @@ const EditCatalog = () => {
     try {
       const response = await axios.put(`/drugCatalog/${drug._id}`, drug);
       console.log("Drug updated successfully:", response.data);
-      alert("Drug saved successfully!");
+      if (alertIfSuccess) {
+        alert("Drug saved successfully!");
+      }
     } catch (error) {
       console.error("Error saving drug:", error);
       alert("Failed to save drug. Please try again.");
@@ -582,6 +584,55 @@ const EditCatalog = () => {
       drugIndex
     ].cleanedIngredients!.filter((_, idx) => idx !== ingredientIndex);
     setParsedData(updatedData);
+  };
+
+  // Function to save all current drugs displayed on the page
+  const handleSaveAll = async () => {
+    try {
+      // Show a loading indicator
+      setIsLoading(true);
+
+      // Get the drugs that are currently visible
+      const drugsToSave = currentItems;
+
+      // Save each drug and collect cleaned ingredients to add to canonical list
+      const allIngredients = [];
+      let successCount = 0;
+
+      for (const drug of drugsToSave) {
+        if (drug._id) {
+          try {
+            // Collect cleaned ingredients for later batch addition
+            if (drug.cleanedIngredients && drug.cleanedIngredients.length > 0) {
+              allIngredients.push(...drug.cleanedIngredients);
+            }
+
+            // Update the drug in the database
+            await updateDrug(drug, false); // Don't alert for each save
+            successCount++;
+          } catch (error) {
+            console.error(`Error saving drug ${drug._id}:`, error);
+          }
+        }
+      }
+
+      // Add any new ingredients to the canonical list in a single batch operation
+      if (allIngredients.length > 0) {
+        await addNewCanonicalIngredients(allIngredients);
+      }
+
+      // Show success message
+      alert(
+        `Saved ${successCount} out of ${drugsToSave.length} drugs successfully.`
+      );
+    } catch (error) {
+      console.error("Error during save all operation:", error);
+      alert(
+        "An error occurred while saving drugs. Please check the console for details."
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Calculate current items based on mode
@@ -864,6 +915,11 @@ const EditCatalog = () => {
                 </button>
               </>
             )}
+
+            {/* Save All Button */}
+            <button onClick={handleSaveAll} className="save-all-button">
+              Save All
+            </button>
           </>
         )}
       </div>

@@ -324,3 +324,27 @@
 .add-ingredient-button:hover {
   background-color: #45a049;
 }
+
+/* Save All Button */
+.save-all-button {
+  background-color: #27ae60;
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-top: 15px;
+  margin-left: 10px;
+  font-weight: bold;
+  font-size: 16px;
+  transition: background-color 0.3s ease;
+}
+
+.save-all-button:hover:not(:disabled) {
+  background-color: #219653;
+}
+
+.save-all-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
