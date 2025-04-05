@@ -37,6 +37,9 @@ const EditCatalog = () => {
   const [currentPage, setCurrentPage] = useState(1); // Pagination state
   const [itemsPerPage] = useState(10); // Number of items per page
   const [dataInitialized, setDataInitialized] = useState(false);
+  const [totalPages, setTotalPages] = useState(1);
+  const [mode, setMode] = useState<"single" | "bulk" | "database">("database");
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     console.log("EditCatalog component mounted");
@@ -47,9 +50,12 @@ const EditCatalog = () => {
     if (!dataInitialized) {
       if (params.id) {
         console.log("Fetching drug by ID:", params.id);
+        // Single drug edit mode
+        setMode("single");
         // Fetch the drug by ID for individual editing
         const fetchDrug = async () => {
           try {
+            setIsLoading(true);
             const baseUrl = axios.defaults.baseURL;
             console.log("API base URL:", baseUrl);
 
@@ -62,31 +68,73 @@ const EditCatalog = () => {
             console.error("Error fetching drug:", error);
             alert("Failed to load drug details.");
             navigate("/");
+          } finally {
+            setIsLoading(false);
           }
         };
         fetchDrug();
-      } else {
-        // Direct navigation to /edit without params - show empty editable table
-        console.log("Direct navigation to /edit without ID - preparing empty form");
-        // Set an empty template for a new drug
-        const emptyDrug: Drug = {
-          name: "",
-          ingredients: "",
-          cleanedIngredients: [],
-          registrationNumber: "",
-          manufacturingRequirements: "",
-          unitOfMeasure: "",
-          manufacturer: "",
-          distributor: "",
-          yearOfRegistration: "",
-          countryOfOrigin: "",
-          usageForm: "",
-        };
-        setParsedData([emptyDrug]); // Start with one empty drug
+      } else if (parsedDataFromState && parsedDataFromState.length > 0) {
+        // Bulk edit mode - data from file uploader
+        setMode("bulk");
+        console.log(
+          "Bulk edit mode - data from file uploader:",
+          parsedDataFromState.length,
+          "items"
+        );
+
+        // Process the data from file uploader
+        const dataWithCleanedIngredients = parsedDataFromState.map(
+          (drug: Drug) => {
+            if (!drug.cleanedIngredients && drug.ingredients) {
+              return {
+                ...drug,
+                cleanedIngredients: cleanIngredients(drug.ingredients),
+              };
+            }
+            return drug;
+          }
+        );
+        setParsedData(dataWithCleanedIngredients);
+        setTotalPages(
+          Math.ceil(dataWithCleanedIngredients.length / itemsPerPage)
+        );
         setDataInitialized(true);
+      } else {
+        // Database edit mode - load all drugs from database
+        setMode("database");
+        console.log("Database edit mode - loading drugs from database");
+        fetchDrugsFromDatabase(1);
       }
     }
-  }, [params.id, navigate, parsedDataFromState, dataInitialized]);
+  }, [params.id, navigate, parsedDataFromState, dataInitialized, itemsPerPage]);
+
+  // Function to fetch drugs from database with pagination
+  const fetchDrugsFromDatabase = async (page: number) => {
+    try {
+      setIsLoading(true);
+      const response = await axios.get("/drugCatalog", {
+        params: { page, limit: itemsPerPage },
+      });
+
+      // Check if the response includes total count for pagination
+      const totalCount =
+        response.headers["x-total-count"] || response.data.length;
+      const calculatedTotalPages = Math.ceil(totalCount / itemsPerPage);
+      setTotalPages(calculatedTotalPages > 0 ? calculatedTotalPages : 1);
+
+      setParsedData(response.data);
+      setCurrentPage(page);
+      setDataInitialized(true);
+    } catch (error) {
+      console.error("Error fetching drugs:", error);
+      alert("Failed to load drugs from database.");
+      // Still set initialized to true to prevent infinite loading attempts
+      setDataInitialized(true);
+      setParsedData([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleEdit = (index: number, field: string, value: any) => {
     const updatedData = [...parsedData];
@@ -187,7 +235,7 @@ const EditCatalog = () => {
     }
   };
 
-  // Add function to add a new row
+  // Add new row function
   const addNewRow = () => {
     const emptyDrug: Drug = {
       name: "",
@@ -202,23 +250,44 @@ const EditCatalog = () => {
       countryOfOrigin: "",
       usageForm: "",
     };
+
+    // Add the new empty drug to the data
     setParsedData([...parsedData, emptyDrug]);
   };
 
-  // Pagination logic
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = parsedData.slice(indexOfFirstItem, indexOfLastItem);
+  // Calculate current items based on mode
+  let currentItems = parsedData;
+
+  // Only apply local pagination in bulk mode
+  if (mode === "bulk") {
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    currentItems = parsedData.slice(indexOfFirstItem, indexOfLastItem);
+  }
 
   const paginateNext = () => {
-    if (currentPage < Math.ceil(parsedData.length / itemsPerPage)) {
-      setCurrentPage(currentPage + 1);
+    if (mode === "database") {
+      if (currentPage < totalPages) {
+        fetchDrugsFromDatabase(currentPage + 1);
+      }
+    } else {
+      // Standard pagination for bulk edit mode
+      if (currentPage < Math.ceil(parsedData.length / itemsPerPage)) {
+        setCurrentPage(currentPage + 1);
+      }
     }
   };
 
   const paginatePrev = () => {
-    if (currentPage > 1) {
-      setCurrentPage(currentPage - 1);
+    if (mode === "database") {
+      if (currentPage > 1) {
+        fetchDrugsFromDatabase(currentPage - 1);
+      }
+    } else {
+      // Standard pagination for bulk edit mode
+      if (currentPage > 1) {
+        setCurrentPage(currentPage - 1);
+      }
     }
   };
 
@@ -243,10 +312,19 @@ const EditCatalog = () => {
     <>
       <Navigation />
       <div className="display-container">
-        <h3>{params.id ? "Edit Drug" : "Add/Edit Drugs"}</h3>
-        {parsedData.length === 0 ? (
+        <h3>
+          {mode === "single"
+            ? "Edit Drug"
+            : mode === "bulk"
+            ? "Edit Uploaded Drugs"
+            : "Edit Drug Database"}
+        </h3>
+
+        {isLoading ? (
+          <div className="loading">Loading drugs...</div>
+        ) : parsedData.length === 0 ? (
           <div className="no-data-message">
-            <p>No data available. You can add a new drug entry or upload files.</p>
+            <p>No drugs found. You can add a new drug entry.</p>
             <button onClick={addNewRow} className="add-row-button">
               Add New Drug
             </button>
@@ -264,17 +342,13 @@ const EditCatalog = () => {
               </thead>
               <tbody>
                 {currentItems.map((drug, index) => (
-                  <tr key={indexOfFirstItem + index}>
+                  <tr key={drug._id || `temp-${index}`}>
                     <td>
                       <input
                         type="text"
                         value={drug.name}
                         onChange={(e) =>
-                          handleEdit(
-                            indexOfFirstItem + index,
-                            "name",
-                            e.target.value
-                          )
+                          handleEdit(index, "name", e.target.value)
                         }
                       />
                     </td>
@@ -282,20 +356,18 @@ const EditCatalog = () => {
                       <textarea
                         value={drug.ingredients}
                         onChange={(e) =>
-                          handleEdit(
-                            indexOfFirstItem + index,
-                            "ingredients",
-                            e.target.value
-                          )
+                          handleEdit(index, "ingredients", e.target.value)
                         }
                       />
                     </td>
                     <td>
                       <textarea
-                        value={formatCleanedIngredients(drug.cleanedIngredients)}
+                        value={formatCleanedIngredients(
+                          drug.cleanedIngredients
+                        )}
                         onChange={(e) =>
                           handleEdit(
-                            indexOfFirstItem + index,
+                            index,
                             "cleanedIngredientsString",
                             e.target.value
                           )
@@ -307,53 +379,66 @@ const EditCatalog = () => {
                       </small>
                     </td>
                     <td>
-                      <button onClick={() => handleSave(indexOfFirstItem + index)}>
-                        Save
-                      </button>
+                      <button onClick={() => handleSave(index)}>Save</button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {/* Pagination with Arrows */}
+
+            {/* Pagination Controls */}
             <div className="pagination">
-              <button onClick={paginatePrev} disabled={currentPage === 1}>
+              <button
+                onClick={paginatePrev}
+                disabled={currentPage === 1 || isLoading}
+              >
                 Previous
               </button>
               <span className="page-info">
-                Page {currentPage} of {Math.ceil(parsedData.length / itemsPerPage)}
+                Page {currentPage} of{" "}
+                {mode === "bulk"
+                  ? Math.ceil(parsedData.length / itemsPerPage)
+                  : totalPages}
               </span>
               <button
                 onClick={paginateNext}
                 disabled={
-                  currentPage === Math.ceil(parsedData.length / itemsPerPage)
+                  (mode === "bulk" &&
+                    currentPage ===
+                      Math.ceil(parsedData.length / itemsPerPage)) ||
+                  (mode === "database" && currentPage === totalPages) ||
+                  isLoading
                 }
               >
                 Next
               </button>
             </div>
+
             {/* Add New Row Button */}
-            {!params.id && (
-              <button onClick={addNewRow} className="add-row-button">
-                Add New Row
-              </button>
-            )}
-            {/* Progress Bar */}
-            {uploading && (
-              <div className="progress-container">
-                <progress value={progress} max="100" />
-                <span>{Math.round(progress)}%</span>
-              </div>
-            )}
-            {/* Upload Button */}
-            {!params.id && (
-              <button
-                onClick={handleUpload}
-                disabled={uploading || parsedData.length === 0}
-                className="upload-button"
-              >
-                {uploading ? "Uploading..." : "Upload"}
-              </button>
+            <button onClick={addNewRow} className="add-row-button">
+              Add New Drug
+            </button>
+
+            {/* Only show upload button in bulk mode */}
+            {mode === "bulk" && (
+              <>
+                {/* Progress Bar */}
+                {uploading && (
+                  <div className="progress-container">
+                    <progress value={progress} max="100" />
+                    <span>{Math.round(progress)}%</span>
+                  </div>
+                )}
+
+                {/* Upload Button */}
+                <button
+                  onClick={handleUpload}
+                  disabled={uploading || parsedData.length === 0}
+                  className="upload-button"
+                >
+                  {uploading ? "Uploading..." : "Upload All"}
+                </button>
+              </>
             )}
           </>
         )}
