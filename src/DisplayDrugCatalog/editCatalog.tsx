@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import "./editCatalog.css";
@@ -28,6 +28,12 @@ interface Drug {
   additionalNotes?: string;
 }
 
+// Interface for ingredient suggestions
+interface IngredientSuggestion {
+  name: string;
+  distance: number;
+}
+
 const EditCatalog = () => {
   const location = useLocation();
   const params = useParams<{ id?: string }>();
@@ -43,11 +49,27 @@ const EditCatalog = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [mode, setMode] = useState<"single" | "bulk" | "database">("database");
   const [isLoading, setIsLoading] = useState(false);
+  // New state for canonical ingredients
+  const [canonicalIngredients, setCanonicalIngredients] = useState<string[]>(
+    []
+  );
+  // State for ingredient suggestions
+  const [ingredientSuggestions, setIngredientSuggestions] = useState<{
+    [key: string]: IngredientSuggestion[];
+  }>({});
+  // Add ref to track if we've already tried to fetch canonical ingredients
+  const canonicalFetchAttempted = useRef(false);
 
   useEffect(() => {
     console.log("EditCatalog component mounted");
     console.log("parsedDataFromState:", parsedDataFromState);
     console.log("params.id:", params.id);
+
+    // Only fetch canonical ingredients once
+    if (!canonicalFetchAttempted.current) {
+      canonicalFetchAttempted.current = true;
+      fetchCanonicalIngredients();
+    }
 
     // Only run this effect once on initial render or when relevant dependencies change
     if (!dataInitialized) {
@@ -110,6 +132,240 @@ const EditCatalog = () => {
       }
     }
   }, [params.id, navigate, parsedDataFromState, dataInitialized, itemsPerPage]);
+
+  // Function to fetch canonical ingredients list
+  const fetchCanonicalIngredients = async () => {
+    try {
+      const response = await axios.get("/ingredients/canonical");
+      setCanonicalIngredients(response.data);
+      console.log("Fetched canonical ingredients:", response.data.length);
+    } catch (error) {
+      console.error("Error fetching canonical ingredients:", error);
+      // Provide fallback ingredients if endpoint doesn't exist yet
+      const fallbackIngredients = [
+        "Acetaminophen",
+        "Ibuprofen",
+        "Aspirin",
+        "Caffeine",
+        "Diphenhydramine",
+        "Paracetamol",
+        "Amoxicillin",
+        "Codeine",
+        "Simvastatin",
+        "Metformin",
+      ];
+      console.log("Using fallback ingredients due to API error");
+      setCanonicalIngredients(fallbackIngredients);
+    }
+  };
+
+  // Optimized function to calculate Levenshtein distance with early termination
+  const calculateLevenshteinDistance = (
+    a: string,
+    b: string,
+    threshold: number = Infinity
+  ): number => {
+    // If the length difference exceeds the threshold, we can return early
+    if (Math.abs(a.length - b.length) > threshold) {
+      return threshold + 1;
+    }
+
+    // Optimization: If strings are equal, no need to calculate
+    if (a === b) return 0;
+
+    // Optimization: If either string is empty, the distance is the length of the other string
+    if (a.length === 0) return b.length;
+    if (b.length === 0) return a.length;
+
+    // Use two rows of the matrix instead of the whole matrix to save memory
+    let previousRow = Array(b.length + 1);
+    let currentRow = Array(b.length + 1);
+
+    // Initialize the previous row
+    for (let i = 0; i <= b.length; i++) {
+      previousRow[i] = i;
+    }
+
+    // Fill in the current row
+    for (let i = 1; i <= a.length; i++) {
+      currentRow[0] = i;
+
+      let minDistance = threshold + 1; // Track minimum in this row for early termination
+
+      for (let j = 1; j <= b.length; j++) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+
+        currentRow[j] = Math.min(
+          previousRow[j] + 1, // deletion
+          currentRow[j - 1] + 1, // insertion
+          previousRow[j - 1] + cost // substitution
+        );
+
+        // Keep track of minimum in this row
+        if (currentRow[j] < minDistance) {
+          minDistance = currentRow[j];
+        }
+      }
+
+      // If every cell in this row exceeds threshold, can return early
+      if (minDistance > threshold) {
+        return threshold + 1;
+      }
+
+      // Swap rows for next iteration
+      const temp = previousRow;
+      previousRow = currentRow;
+      currentRow = temp;
+    }
+
+    // The last calculated value is in previousRow[b.length] due to the row swap
+    return previousRow[b.length];
+  };
+
+  // Function to find and suggest closest canonical ingredients (optimized)
+  const findSuggestedIngredients = (
+    ingredient: string,
+    maxSuggestions: number = 3
+  ): IngredientSuggestion[] => {
+    if (!ingredient || ingredient.trim().length === 0) return [];
+
+    const sanitizedIngredient = ingredient.trim().toLowerCase();
+    if (sanitizedIngredient.length < 2) return []; // Skip very short strings
+
+    const results: IngredientSuggestion[] = [];
+    let maxDistance = 100; // Start with a high threshold
+
+    // First pass - find initial candidates with quick checks
+    const initialCandidates = canonicalIngredients.filter((canonical) => {
+      // Quick check: exact match
+      if (canonical.toLowerCase() === sanitizedIngredient) {
+        results.push({ name: canonical, distance: 0 });
+        return false;
+      }
+
+      // Quick check: first few characters match (good candidates)
+      const lowerCanonical = canonical.toLowerCase();
+      return (
+        lowerCanonical.startsWith(sanitizedIngredient.substring(0, 2)) ||
+        sanitizedIngredient.startsWith(lowerCanonical.substring(0, 2))
+      );
+    });
+
+    // If we already have exact matches, just return them
+    if (results.length > 0) return results;
+
+    // Second pass - calculate distances for promising candidates
+    for (const canonical of initialCandidates) {
+      // Calculate distance with current maxDistance threshold
+      const distance = calculateLevenshteinDistance(
+        sanitizedIngredient,
+        canonical.toLowerCase(),
+        maxDistance
+      );
+
+      // If distance is within our threshold, add to results
+      if (distance <= maxDistance) {
+        results.push({ name: canonical, distance });
+
+        // If we have enough suggestions, update the maxDistance threshold
+        if (results.length >= maxSuggestions) {
+          results.sort((a, b) => a.distance - b.distance);
+          // Keep only the top maxSuggestions
+          if (results.length > maxSuggestions) {
+            results.length = maxSuggestions;
+          }
+          // Update threshold to the worst distance we're currently keeping
+          maxDistance = results[results.length - 1].distance;
+        }
+      }
+    }
+
+    // If we don't have enough suggestions from the initial candidates,
+    // check the remaining ingredients with our current threshold
+    if (results.length < maxSuggestions) {
+      const remainingIngredients = canonicalIngredients.filter(
+        (canonical) => !initialCandidates.includes(canonical)
+      );
+
+      for (const canonical of remainingIngredients) {
+        const distance = calculateLevenshteinDistance(
+          sanitizedIngredient,
+          canonical.toLowerCase(),
+          maxDistance
+        );
+
+        if (distance <= maxDistance) {
+          results.push({ name: canonical, distance });
+
+          // Sort and trim results after each addition that meets our criteria
+          if (results.length >= maxSuggestions) {
+            results.sort((a, b) => a.distance - b.distance);
+            if (results.length > maxSuggestions) {
+              results.length = maxSuggestions;
+            }
+            maxDistance = results[results.length - 1].distance;
+          }
+        }
+      }
+    }
+
+    return results.sort((a, b) => a.distance - b.distance);
+  };
+
+  // Function to generate suggestions for all ingredients in a drug
+  const generateSuggestionsForDrug = (index: number) => {
+    const drug = parsedData[index];
+    if (!drug.cleanedIngredients || drug.cleanedIngredients.length === 0) {
+      // If no cleaned ingredients, try to parse from raw ingredients
+      handleAutoParse(index);
+      return;
+    }
+
+    // Generate suggestions for each cleaned ingredient
+    const suggestions: { [key: string]: IngredientSuggestion[] } = {};
+    drug.cleanedIngredients.forEach((ingredient) => {
+      suggestions[ingredient] = findSuggestedIngredients(ingredient);
+    });
+
+    // Update the suggestions state
+    setIngredientSuggestions((prev) => ({
+      ...prev,
+      [index]: suggestions,
+    }));
+  };
+
+  // Function to handle auto-parsing of ingredients
+  const handleAutoParse = (index: number) => {
+    const updatedData = [...parsedData];
+    const drug = updatedData[index];
+
+    if (drug.ingredients) {
+      // Clean the ingredients and update the cleaned ingredients array
+      const cleaned = cleanIngredients(drug.ingredients);
+      updatedData[index].cleanedIngredients = cleaned;
+      setParsedData(updatedData);
+
+      // Generate suggestions for the newly cleaned ingredients
+      setTimeout(() => generateSuggestionsForDrug(index), 0);
+    }
+  };
+
+  // Function to handle clicking on a suggested ingredient
+  const handleSuggestionClick = (index: number, suggestion: string) => {
+    const updatedData = [...parsedData];
+    const drug = updatedData[index];
+
+    // Get current cleaned ingredients as a string
+    const currentCleanedStr = formatCleanedIngredients(drug.cleanedIngredients);
+
+    // Append the suggestion with a comma if there are already ingredients
+    const newCleanedStr = currentCleanedStr
+      ? `${currentCleanedStr}, ${suggestion}`
+      : suggestion;
+
+    // Update the cleaned ingredients
+    handleEdit(index, "cleanedIngredientsString", newCleanedStr);
+  };
 
   // Function to fetch drugs from database with pagination
   const fetchDrugsFromDatabase = async (page: number) => {
@@ -232,7 +488,13 @@ const EditCatalog = () => {
   const handleSave = async (index: number) => {
     const drug = parsedData[index];
     if (drug._id) {
-      await updateDrug(drug);
+      try {
+        await updateDrug(drug);
+        // After successful save, refresh the canonical ingredients list
+        fetchCanonicalIngredients();
+      } catch (error) {
+        console.error("Error during drug save:", error);
+      }
     } else {
       alert("Drug ID is missing. Cannot save.");
     }
@@ -337,6 +599,15 @@ const EditCatalog = () => {
           </div>
         ) : (
           <>
+            {/* Instructions Box */}
+            <div className="instructions-box">
+              <p>
+                <strong>Editing Ingredients:</strong> Edit cleaned ingredients
+                by separating them with commas. Click on suggested ingredients
+                to add them to the cleaned ingredients list.
+              </p>
+            </div>
+
             <table className="drug-table">
               <thead>
                 <tr>
@@ -365,6 +636,12 @@ const EditCatalog = () => {
                           handleEdit(index, "ingredients", e.target.value)
                         }
                       />
+                      <button
+                        className="autoparse-button"
+                        onClick={() => handleAutoParse(index)}
+                      >
+                        Autoparse
+                      </button>
                     </td>
                     <td>
                       <textarea
@@ -378,11 +655,53 @@ const EditCatalog = () => {
                             e.target.value
                           )
                         }
-                        placeholder="Comma-separated list of cleaned ingredients"
+                        placeholder="Cleaned ingredients"
                       />
-                      <small className="text-muted">
-                        Edit ingredients by separating them with commas
-                      </small>
+
+                      {/* Ingredient Suggestions */}
+                      <div className="ingredient-suggestions">
+                        {drug.cleanedIngredients &&
+                          drug.cleanedIngredients.length > 0 && (
+                            <button
+                              className="suggestions-button"
+                              onClick={() => generateSuggestionsForDrug(index)}
+                            >
+                              Get Suggestions
+                            </button>
+                          )}
+
+                        <div className="suggestions-list">
+                          {ingredientSuggestions[index] &&
+                            Object.entries(ingredientSuggestions[index]).map(
+                              ([ingredient, suggestions]) => (
+                                <div
+                                  key={ingredient}
+                                  className="suggestion-group"
+                                >
+                                  <span className="ingredient-name">
+                                    {ingredient}
+                                  </span>
+                                  <div className="similar-ingredients">
+                                    {suggestions.map((suggestion) => (
+                                      <span
+                                        key={suggestion.name}
+                                        className="suggestion-item"
+                                        onClick={() =>
+                                          handleSuggestionClick(
+                                            index,
+                                            suggestion.name
+                                          )
+                                        }
+                                      >
+                                        {suggestion.name}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )
+                            )}
+                        </div>
+                      </div>
                     </td>
                     <td>
                       <button onClick={() => handleSave(index)}>Save</button>
