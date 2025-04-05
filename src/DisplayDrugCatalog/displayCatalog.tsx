@@ -9,6 +9,7 @@ interface Drug {
   registrationNumber: string;
   name: string;
   ingredients: string;
+  cleanedIngredients?: string[]; // Add cleaned ingredients
   manufacturingRequirements: string;
   unitOfMeasure: string;
   estimatedPrice?: number;
@@ -73,6 +74,14 @@ const DisplayCatalog: React.FC = () => {
     navigate(`/edit/${drug._id}`); // Pass the drug object as state
   };
 
+  // Format cleaned ingredients for display
+  const formatCleanedIngredients = (ingredients?: string[]) => {
+    if (!ingredients || !Array.isArray(ingredients) || ingredients.length === 0) {
+      return "None";
+    }
+    return ingredients.join(", ");
+  };
+
   return (
     <div>
       <Navigation />
@@ -83,7 +92,8 @@ const DisplayCatalog: React.FC = () => {
             <div key={drug._id} className="drug-card">
               <p><strong>Registration Number:</strong> {drug.registrationNumber}</p>
               <p><strong>Name:</strong> {drug.name}</p>
-              <p><strong>Ingredients:</strong> {drug.ingredients}</p>
+              <p><strong>Raw Ingredients:</strong> {drug.ingredients}</p>
+              <p><strong>Cleaned Ingredients:</strong> {formatCleanedIngredients(drug.cleanedIngredients)}</p>
               <p><strong>Manufacturing Requirements:</strong> {drug.manufacturingRequirements}</p>
               <p><strong>Unit of Measure:</strong> {drug.unitOfMeasure}</p>
               {drug.estimatedPrice !== undefined && (
