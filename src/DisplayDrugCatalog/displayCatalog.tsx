@@ -4,6 +4,9 @@ import { useNavigate } from "react-router-dom";
 import Navigation from "../Components/navigation.tsx";
 import "./displayCatalog.css";
 
+// Set axios default base URL
+axios.defaults.baseURL = "http://localhost:4000";
+
 interface Drug {
   _id: string;
   registrationNumber: string;
@@ -31,8 +34,6 @@ const DisplayCatalog: React.FC = () => {
   const [hasMore, setHasMore] = useState<boolean>(true);
   const limit = 24; // Number of drugs per page
   const navigate = useNavigate();
-
-  axios.defaults.baseURL = "http://localhost:4000"; // Changeable on deploy
 
   const fetchDrugs = async (pageNumber: number) => {
     setLoading(true);
