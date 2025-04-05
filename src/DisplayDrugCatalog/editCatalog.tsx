@@ -136,26 +136,47 @@ const EditCatalog = () => {
   // Function to fetch canonical ingredients list
   const fetchCanonicalIngredients = async () => {
     try {
-      const response = await axios.get("/ingredients/canonical");
-      setCanonicalIngredients(response.data);
+      const response = await axios.get("/canonicalIngredients");
+      setCanonicalIngredients(
+        response.data.map((ingredient) => ingredient.name)
+      );
       console.log("Fetched canonical ingredients:", response.data.length);
     } catch (error) {
       console.error("Error fetching canonical ingredients:", error);
       // Provide fallback ingredients if endpoint doesn't exist yet
-      const fallbackIngredients = [
-        "Acetaminophen",
-        "Ibuprofen",
-        "Aspirin",
-        "Caffeine",
-        "Diphenhydramine",
-        "Paracetamol",
-        "Amoxicillin",
-        "Codeine",
-        "Simvastatin",
-        "Metformin",
-      ];
+      const fallbackIngredients = [];
       console.log("Using fallback ingredients due to API error");
       setCanonicalIngredients(fallbackIngredients);
+    }
+  };
+
+  // Function to add new canonical ingredients to the database
+  const addNewCanonicalIngredients = async (ingredients) => {
+    try {
+      // Get current canonical ingredients for comparison
+      const response = await axios.get("/canonicalIngredients");
+      const existingIngredients = new Set(
+        response.data.map((ing) => ing.name.toLowerCase())
+      );
+
+      // Filter out ingredients that already exist (case insensitive)
+      const newIngredients = ingredients.filter(
+        (ingredient) => !existingIngredients.has(ingredient.toLowerCase())
+      );
+
+      if (newIngredients.length === 0) {
+        console.log("No new ingredients to add");
+        return;
+      }
+
+      // Add the new ingredients
+      console.log("Adding new canonical ingredients:", newIngredients);
+      await axios.post("/canonicalIngredients", newIngredients);
+
+      // Refresh the ingredients list
+      fetchCanonicalIngredients();
+    } catch (error) {
+      console.error("Error adding new canonical ingredients:", error);
     }
   };
 
@@ -487,13 +508,20 @@ const EditCatalog = () => {
 
   const handleSave = async (index: number) => {
     const drug = parsedData[index];
+
     if (drug._id) {
       try {
+        // Check if there are ingredients to potentially add to canonical list
+        if (drug.cleanedIngredients && drug.cleanedIngredients.length > 0) {
+          // Add any new ingredients to the canonical list
+          await addNewCanonicalIngredients(drug.cleanedIngredients);
+        }
+
+        // Update the drug in the database
         await updateDrug(drug);
-        // After successful save, refresh the canonical ingredients list
-        fetchCanonicalIngredients();
       } catch (error) {
         console.error("Error during drug save:", error);
+        alert("Failed to save drug. Please try again.");
       }
     } else {
       alert("Drug ID is missing. Cannot save.");
@@ -678,9 +706,6 @@ const EditCatalog = () => {
                                   key={ingredient}
                                   className="suggestion-group"
                                 >
-                                  <span className="ingredient-name">
-                                    {ingredient}
-                                  </span>
                                   <div className="similar-ingredients">
                                     {suggestions.map((suggestion) => (
                                       <span
